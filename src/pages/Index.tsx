@@ -1,5 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+
+const SAVE_KEY = "urban_game_save";
+
+function loadGame(): GameState | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as GameState;
+  } catch {
+    return null;
+  }
+}
+
+function saveGame(state: GameState) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  } catch (e) { console.warn("Save error", e); }
+}
 
 type Tab = "dashboard" | "work" | "shop" | "casino" | "property";
 
@@ -55,18 +73,24 @@ const PROPERTIES = [
   { id: "office", name: "Офис", desc: "+350₽/час пассивно", price: 55000, icon: "Building2" },
 ];
 
+const DEFAULT_GAME: GameState = {
+  balance: 500,
+  level: 1,
+  xp: 0,
+  xpMax: 300,
+  energy: 80,
+  energyMax: 100,
+  inventory: [],
+  properties: [],
+};
+
 export default function Index() {
   const [tab, setTab] = useState<Tab>("dashboard");
-  const [game, setGame] = useState<GameState>({
-    balance: 500,
-    level: 1,
-    xp: 120,
-    xpMax: 300,
-    energy: 80,
-    energyMax: 100,
-    inventory: [],
-    properties: [],
-  });
+  const [game, setGame] = useState<GameState>(() => loadGame() ?? DEFAULT_GAME);
+
+  useEffect(() => {
+    saveGame(game);
+  }, [game]);
   const [workingJob, setWorkingJob] = useState<string | null>(null);
   const [casinoResult, setCasinoResult] = useState<string | null>(null);
   const [casinoBet, setCasinoBet] = useState(50);
@@ -242,6 +266,13 @@ export default function Index() {
                 <QuickBtn label="Имущество" icon="Building2" onClick={() => setTab("property")} />
               </div>
             </div>
+
+            <button
+              onClick={() => { if (confirm("Сбросить весь прогресс?")) { localStorage.removeItem(SAVE_KEY); setGame(DEFAULT_GAME); } }}
+              className="w-full py-2 rounded-xl text-[11px] font-semibold text-[var(--c-muted)] border border-[var(--c-border)] hover:border-red-500/30 hover:text-red-400 transition-all"
+            >
+              Сбросить прогресс
+            </button>
           </div>
         )}
 

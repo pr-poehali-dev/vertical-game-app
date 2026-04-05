@@ -68,9 +68,9 @@ const SHOP_ITEMS = [
 ];
 
 const PROPERTIES = [
-  { id: "room", name: "Комната", desc: "+30₽/час пассивно", price: 5000, icon: "Home" },
-  { id: "flat", name: "Квартира", desc: "+100₽/час пассивно", price: 18000, icon: "Building" },
-  { id: "office", name: "Офис", desc: "+350₽/час пассивно", price: 55000, icon: "Building2" },
+  { id: "room", name: "Комната", desc: "+30₽/мин пассивно", price: 5000, icon: "Home", incomePerMin: 30 },
+  { id: "flat", name: "Квартира", desc: "+100₽/мин пассивно", price: 18000, icon: "Building", incomePerMin: 100 },
+  { id: "office", name: "Офис", desc: "+350₽/мин пассивно", price: 55000, icon: "Building2", incomePerMin: 350 },
 ];
 
 const DEFAULT_GAME: GameState = {
@@ -91,6 +91,26 @@ export default function Index() {
   useEffect(() => {
     saveGame(game);
   }, [game]);
+
+  const [passiveMsg, setPassiveMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setGame(g => {
+        if (g.properties.length === 0) return g;
+        const totalIncome = g.properties.reduce((sum, propId) => {
+          const prop = PROPERTIES.find(p => p.id === propId);
+          return sum + (prop?.incomePerMin ?? 0);
+        }, 0);
+        if (totalIncome === 0) return g;
+        setPassiveMsg(`+${totalIncome}₽ пассивный доход`);
+        setTimeout(() => setPassiveMsg(null), 2500);
+        return { ...g, balance: g.balance + totalIncome };
+      });
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [workingJob, setWorkingJob] = useState<string | null>(null);
   const [casinoResult, setCasinoResult] = useState<string | null>(null);
   const [casinoBet, setCasinoBet] = useState(50);
@@ -224,6 +244,12 @@ export default function Index() {
           🎉 {levelUpMsg}
         </div>
       )}
+      {passiveMsg && (
+        <div className="fixed top-16 left-4 right-4 z-50 bg-green-500/90 text-white text-sm font-black rounded-xl px-4 py-3 text-center animate-fade-in shadow-lg flex items-center justify-center gap-2">
+          <Icon name="Building2" size={14} />
+          {passiveMsg}
+        </div>
+      )}
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-24">
@@ -250,12 +276,20 @@ export default function Index() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard label="Уровень" value={`${game.level}`} sub="опыт накапливается" icon="Trophy" color="#F59E0B" />
-              <StatCard label="Энергия" value={`${game.energy}`} sub={`из ${game.energyMax}`} icon="Zap" color="#4ADE80" />
-              <StatCard label="Имущество" value={`${game.properties.length}`} sub="объектов куплено" icon="Building2" color="#60A5FA" />
-              <StatCard label="Инвентарь" value={`${game.inventory.length}`} sub="предметов" icon="Package" color="#A78BFA" />
-            </div>
+            {(() => {
+              const totalPassive = game.properties.reduce((sum, pid) => {
+                const p = PROPERTIES.find(x => x.id === pid);
+                return sum + (p?.incomePerMin ?? 0);
+              }, 0);
+              return (
+                <div className="grid grid-cols-2 gap-3">
+                  <StatCard label="Уровень" value={`${game.level}`} sub="опыт накапливается" icon="Trophy" color="#F59E0B" />
+                  <StatCard label="Энергия" value={`${game.energy}`} sub={`из ${game.energyMax}`} icon="Zap" color="#4ADE80" />
+                  <StatCard label="Имущество" value={`${game.properties.length}`} sub={totalPassive > 0 ? `+${totalPassive}₽/мин` : "нет объектов"} icon="Building2" color="#60A5FA" />
+                  <StatCard label="Инвентарь" value={`${game.inventory.length}`} sub="предметов" icon="Package" color="#A78BFA" />
+                </div>
+              );
+            })()}
 
             <div className="space-y-2">
               <p className="text-[11px] font-bold text-[var(--c-muted)] uppercase tracking-widest">Быстрые действия</p>
@@ -352,6 +386,21 @@ export default function Index() {
         {tab === "property" && (
           <div className="p-4 space-y-3 animate-fade-in">
             <SectionHeader title="Недвижимость" sub="Пассивный доход" />
+            {game.properties.length > 0 && (() => {
+              const totalIncome = game.properties.reduce((sum, pid) => {
+                const p = PROPERTIES.find(x => x.id === pid);
+                return sum + (p?.incomePerMin ?? 0);
+              }, 0);
+              return (
+                <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
+                  <Icon name="TrendingUp" size={16} className="text-green-400 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-green-400">Активный доход</p>
+                    <p className="text-sm font-black text-green-300">+{totalIncome}₽ каждую минуту</p>
+                  </div>
+                </div>
+              );
+            })()}
             {PROPERTIES.map(prop => {
               const owned = game.properties.includes(prop.id);
               return (

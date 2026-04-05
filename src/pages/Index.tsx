@@ -14,11 +14,30 @@ interface GameState {
   properties: string[];
 }
 
+const LEVEL_TITLES: Record<number, string> = {
+  1: "Новичок",
+  2: "Стажёр",
+  3: "Работяга",
+  4: "Специалист",
+  5: "Профи",
+  6: "Эксперт",
+  7: "Мастер",
+  8: "Элита",
+  9: "Магнат",
+  10: "Легенда",
+};
+
+function xpForLevel(level: number) {
+  return Math.floor(300 * Math.pow(1.6, level - 1));
+}
+
 const JOBS = [
-  { id: "courier", name: "Курьер", reward: 50, energyCost: 10, time: "2 мин", icon: "Bike", color: "#4ADE80" },
-  { id: "driver", name: "Таксист", reward: 120, energyCost: 20, time: "5 мин", icon: "Car", color: "#60A5FA" },
-  { id: "programmer", name: "Фрилансер", reward: 300, energyCost: 35, time: "12 мин", icon: "Code", color: "#A78BFA" },
-  { id: "trader", name: "Трейдер", reward: 600, energyCost: 50, time: "25 мин", icon: "TrendingUp", color: "#F59E0B" },
+  { id: "courier", name: "Курьер", reward: 50, energyCost: 10, time: "2 мин", icon: "Bike", color: "#4ADE80", minLevel: 1 },
+  { id: "driver", name: "Таксист", reward: 120, energyCost: 20, time: "5 мин", icon: "Car", color: "#60A5FA", minLevel: 2 },
+  { id: "programmer", name: "Фрилансер", reward: 300, energyCost: 35, time: "12 мин", icon: "Code", color: "#A78BFA", minLevel: 3 },
+  { id: "trader", name: "Трейдер", reward: 600, energyCost: 50, time: "25 мин", icon: "TrendingUp", color: "#F59E0B", minLevel: 5 },
+  { id: "investor", name: "Инвестор", reward: 1500, energyCost: 70, time: "1 час", icon: "BarChart2", color: "#F472B6", minLevel: 7 },
+  { id: "tycoon", name: "Магнат", reward: 4000, energyCost: 90, time: "3 часа", icon: "Crown", color: "#FB923C", minLevel: 9 },
 ];
 
 const SHOP_ITEMS = [
@@ -54,17 +73,39 @@ export default function Index() {
   const [diceValue, setDiceValue] = useState<number | null>(null);
   const [slotResults, setSlotResults] = useState<string[]>([]);
   const [shopMsg, setShopMsg] = useState<string | null>(null);
+  const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null);
+
+  const tryLevelUp = (g: GameState): GameState => {
+    let updated = { ...g };
+    while (updated.xp >= updated.xpMax) {
+      const newLevel = updated.level + 1;
+      const overflow = updated.xp - updated.xpMax;
+      const newXpMax = xpForLevel(newLevel);
+      const newEnergyMax = updated.energyMax + 10;
+      updated = {
+        ...updated,
+        level: newLevel,
+        xp: overflow,
+        xpMax: newXpMax,
+        energyMax: newEnergyMax,
+        energy: Math.min(updated.energy + 30, newEnergyMax),
+      };
+      setLevelUpMsg(`Уровень ${newLevel} — ${LEVEL_TITLES[newLevel] ?? "Легенда"}! +10 макс. энергии`);
+      setTimeout(() => setLevelUpMsg(null), 3500);
+    }
+    return updated;
+  };
 
   const doWork = (job: typeof JOBS[0]) => {
-    if (game.energy < job.energyCost) return;
+    if (game.energy < job.energyCost || game.level < job.minLevel) return;
     setWorkingJob(job.id);
     setTimeout(() => {
-      setGame(g => ({
-        ...g,
-        balance: g.balance + job.reward,
-        energy: Math.max(0, g.energy - job.energyCost),
-        xp: Math.min(g.xpMax, g.xp + Math.floor(job.reward / 10)),
-      }));
+      setGame(g => {
+        const gained = job.reward;
+        const gainedXp = Math.floor(gained / 8);
+        const next = { ...g, balance: g.balance + gained, energy: Math.max(0, g.energy - job.energyCost), xp: g.xp + gainedXp };
+        return tryLevelUp(next);
+      });
       setWorkingJob(null);
     }, 1500);
   };
@@ -154,14 +195,28 @@ export default function Index() {
         </div>
       </header>
 
+      {levelUpMsg && tab !== "dashboard" && (
+        <div className="fixed top-16 left-4 right-4 z-50 bg-[var(--c-accent)] text-black text-sm font-black rounded-xl px-4 py-3 text-center animate-fade-in shadow-lg">
+          🎉 {levelUpMsg}
+        </div>
+      )}
+
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-24">
         {tab === "dashboard" && (
           <div className="p-4 space-y-4 animate-fade-in">
+            {levelUpMsg && (
+              <div className="bg-[var(--c-accent)] text-black text-sm font-black rounded-xl px-4 py-3 text-center animate-fade-in shadow-lg">
+                🎉 {levelUpMsg}
+              </div>
+            )}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--c-accent)] to-[var(--c-accent2)] p-6 text-black">
               <div className="absolute top-0 right-0 w-36 h-36 bg-black/5 rounded-full -translate-y-10 translate-x-10" />
               <div className="absolute bottom-0 left-0 w-28 h-28 bg-black/5 rounded-full translate-y-10 -translate-x-10" />
-              <p className="text-sm opacity-60 mb-1 font-medium">Баланс</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm opacity-60 font-medium">Баланс</p>
+                <span className="text-xs font-black opacity-70 bg-black/10 px-2 py-0.5 rounded-full">{LEVEL_TITLES[game.level] ?? "Легенда"}</span>
+              </div>
               <p className="text-4xl font-black tracking-tight">{game.balance.toLocaleString()}<span className="text-2xl ml-1">₽</span></p>
               <div className="mt-4 flex items-center gap-2">
                 <div className="flex-1 bg-black/15 rounded-full h-1.5">
@@ -193,29 +248,37 @@ export default function Index() {
         {tab === "work" && (
           <div className="p-4 space-y-3 animate-fade-in">
             <SectionHeader title="Работа" sub={`⚡ Энергия: ${game.energy}/${game.energyMax}`} />
-            {JOBS.map(job => (
-              <button
-                key={job.id}
-                onClick={() => doWork(job)}
-                disabled={workingJob === job.id || game.energy < job.energyCost}
-                className="w-full flex items-center gap-4 p-4 rounded-xl bg-[var(--c-surface)] border border-[var(--c-border)] hover:border-[var(--c-accent)]/40 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: job.color + "18" }}>
-                  <Icon name={job.icon} size={22} style={{ color: job.color }} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="font-bold text-sm">{job.name}</p>
-                  <p className="text-xs text-[var(--c-muted)] mt-0.5">⚡ {job.energyCost} · ⏱ {job.time}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  {workingJob === job.id ? (
-                    <span className="text-xs text-[var(--c-accent)] animate-pulse font-medium">Работаю...</span>
-                  ) : (
-                    <span className="text-base font-black text-green-400">+{job.reward}₽</span>
-                  )}
-                </div>
-              </button>
-            ))}
+            {JOBS.map(job => {
+              const locked = game.level < job.minLevel;
+              return (
+                <button
+                  key={job.id}
+                  onClick={() => doWork(job)}
+                  disabled={workingJob === job.id || game.energy < job.energyCost || locked}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all active:scale-[0.98] disabled:cursor-not-allowed ${locked ? "bg-[var(--c-surface2)] border-[var(--c-border)] opacity-50" : "bg-[var(--c-surface)] border-[var(--c-border)] hover:border-[var(--c-accent)]/40 disabled:opacity-40"}`}
+                >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: locked ? "#ffffff08" : job.color + "18" }}>
+                    {locked ? <Icon name="Lock" size={18} className="text-[var(--c-muted)]" /> : <Icon name={job.icon} size={22} style={{ color: job.color }} />}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-sm">{job.name}</p>
+                      {locked && <span className="text-[10px] bg-[var(--c-surface2)] text-[var(--c-muted)] px-1.5 py-0.5 rounded font-semibold">LVL {job.minLevel}</span>}
+                    </div>
+                    <p className="text-xs text-[var(--c-muted)] mt-0.5">
+                      {locked ? `Откроется на ${job.minLevel} уровне` : `⚡ ${job.energyCost} · ⏱ ${job.time}`}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {workingJob === job.id ? (
+                      <span className="text-xs text-[var(--c-accent)] animate-pulse font-medium">Работаю...</span>
+                    ) : (
+                      <span className={`text-base font-black ${locked ? "text-[var(--c-muted)]" : "text-green-400"}`}>+{job.reward}₽</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
 
